@@ -1,5 +1,5 @@
 
- 
+
 function Calendar(element, instanceOptions) {
 	var t = this;
 
@@ -210,7 +210,7 @@ function Calendar(element, instanceOptions) {
 	}
 
 
-	
+
 	// Imports
 	// -----------------------------------------------------------------------------------
 
@@ -238,9 +238,9 @@ function Calendar(element, instanceOptions) {
 	var ignoreWindowResize = 0;
 	var date;
 	var events = [];
-	
-	
-	
+
+
+
 	// Main Rendering
 	// -----------------------------------------------------------------------------------
 
@@ -276,8 +276,8 @@ function Calendar(element, instanceOptions) {
 
 		options.annotations = annotations;
 	}
-	
-	
+
+
 	function render(inc) {
 		if (!content) {
 			initialRender();
@@ -288,8 +288,8 @@ function Calendar(element, instanceOptions) {
 			renderView(inc);
 		}
 	}
-	
-	
+
+
 	function initialRender() {
 		tm = options.theme ? 'ui' : 'fc';
 		element.addClass('fc');
@@ -323,8 +323,8 @@ function Calendar(element, instanceOptions) {
 			$(window).resize(windowResizeProxy);
 		}
 	}
-	
-	
+
+
 	function destroy() {
 
 		if (currentView) {
@@ -337,13 +337,13 @@ function Calendar(element, instanceOptions) {
 
 		$(window).unbind('resize', windowResizeProxy);
 	}
-	
-	
+
+
 	function elementVisible() {
 		return element.is(':visible');
 	}
-	
-	
+
+
 
 	// View Rendering
 	// -----------------------------------------------------------------------------------
@@ -363,7 +363,7 @@ function Calendar(element, instanceOptions) {
 			viewName = viewName || currentView.name;
 			currentView.name = delta = undefined;
 		}
-		
+
 		// if viewType is changing, destroy the old view
 		if (currentView && viewType && currentView.type !== viewType) {
 			header.deactivateButton(currentView.type);
@@ -523,8 +523,8 @@ function Calendar(element, instanceOptions) {
 			return spec.buttonText;
 		}
 	}
-	
-	
+
+
 
 	// Resizing
 	// -----------------------------------------------------------------------------------
@@ -541,8 +541,8 @@ function Calendar(element, instanceOptions) {
 	t.isHeightAuto = function() {
 		return options.contentHeight === 'auto' || options.height === 'auto';
 	};
-	
-	
+
+
 	function updateSize(shouldRecalc) {
 		if (elementVisible()) {
 
@@ -564,8 +564,8 @@ function Calendar(element, instanceOptions) {
 			_calcSize();
 		}
 	}
-	
-	
+
+
 	function _calcSize() { // assumes elementVisible
 		if (typeof options.contentHeight === 'number') { // exists and not 'auto'
 			suggestedViewHeight = options.contentHeight;
@@ -580,8 +580,8 @@ function Calendar(element, instanceOptions) {
 			suggestedViewHeight = Math.round(content.width() / Math.max(options.aspectRatio, 0.5));
 		}
 	}
-	
-	
+
+
 	function windowResize(ev) {
 		if (
 			!ignoreWindowResize &&
@@ -593,9 +593,9 @@ function Calendar(element, instanceOptions) {
 			}
 		}
 	}
-	
-	
-	
+
+
+
 	/* Event Fetching/Rendering
 	-----------------------------------------------------------------------------*/
 	// TODO: going forward, most of this stuff should be directly handled by the view
@@ -630,7 +630,7 @@ function Calendar(element, instanceOptions) {
 		currentView.destroyViewEvents();
 		unfreezeContentHeight();
 	}
-	
+
 
 	function getAndRenderEvents() {
 		if (!options.lazyFetching || isFetchNeeded(currentView.start, currentView.end)) {
@@ -648,7 +648,7 @@ function Calendar(element, instanceOptions) {
 			// ... which will call renderEvents
 	}
 
-	
+
 	// called when event data arrives
 	function reportEvents(_events) {
 		events = _events;
@@ -681,12 +681,12 @@ function Calendar(element, instanceOptions) {
 			header.enableButton('today');
 		}
 	}
-	
+
 
 
 	/* Selection
 	-----------------------------------------------------------------------------*/
-	
+
 
 	function select(start, end) {
 
@@ -703,54 +703,54 @@ function Calendar(element, instanceOptions) {
 
 		currentView.select({ start: start, end: end }); // accepts a range
 	}
-	
+
 
 	function unselect() { // safe to be called before renderView
 		if (currentView) {
 			currentView.unselect();
 		}
 	}
-	
-	
-	
+
+
+
 	/* Date
 	-----------------------------------------------------------------------------*/
-	
-	
+
+
 	function prev() {
 		renderView(-1);
 	}
-	
-	
+
+
 	function next() {
 		renderView(1);
 	}
-	
-	
+
+
 	function prevYear() {
 		date.add(-1, 'years');
 		renderView();
 	}
-	
-	
+
+
 	function nextYear() {
 		date.add(1, 'years');
 		renderView();
 	}
-	
-	
+
+
 	function today() {
 		date = t.getNow();
 		renderView();
 	}
-	
-	
+
+
 	function gotoDate(dateInput) {
 		date = t.moment(dateInput);
 		renderView();
 	}
-	
-	
+
+
 	function incrementDate(delta) {
 		date.add(moment.duration(delta));
 		renderView();
@@ -781,8 +781,8 @@ function Calendar(element, instanceOptions) {
 		date = newDate;
 		changeView(viewType);
 	}
-	
-	
+
+
 	function getDate() {
 		return date.clone();
 	}
@@ -809,23 +809,23 @@ function Calendar(element, instanceOptions) {
 			overflow: ''
 		});
 	}
-	
-	
-	
+
+
+
 	/* Misc
 	-----------------------------------------------------------------------------*/
-	
+
 
 	function getCalendar() {
 		return t;
 	}
 
-	
+
 	function getView() {
 		return currentView;
 	}
-	
-	
+
+
 	function option(name, value) {
 		if (value === undefined) {
 			return options[name];
@@ -835,8 +835,8 @@ function Calendar(element, instanceOptions) {
 			updateSize(true); // true = allow recalculation of height
 		}
 	}
-	
-	
+
+
 	function trigger(name, thisObj) {
 		if (options[name]) {
 			return options[name].apply(
@@ -845,5 +845,3 @@ function Calendar(element, instanceOptions) {
 			);
 		}
 	}
-
-}

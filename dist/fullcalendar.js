@@ -17,6 +17,7 @@
 
 var defaults = {
 
+	lang: 'en',
 	titleRangeSeparator: ' \u2014 ', // emphasized dash
 	monthYearFormat: 'MMMM YYYY', // required for en. other languages rely on datepicker computable option
 
@@ -50,7 +51,30 @@ var defaults = {
 	timezone: false,
 
 	//allDayDefault: undefined,
+	//TODO: Check this area from here down to 
+	// time formats
+	titleFormat: {
+		month: 'MMMM YYYY', // like "September 1986". each language will override this
+		week: 'll', // like "Sep 4 1986"
+		day: 'LL', // like "September 4 1986"
+		resourceDay: 'LL - dddd' // like "September 4 1986 - Monday"
+	},
+	columnFormat: {
+		month: 'ddd', // like "Sat"
+		week: generateWeekColumnFormat,
+		day: 'dddd' // like "Saturday"
+	},
+	timeFormat: { // for event elements
+		'default': generateShortTimeFormat
+	},
 
+	displayEventEnd: {
+		month: false,
+		basicWeek: false,
+		'default': true
+	},
+	
+	//TODO: down to here
 	// locale
 	isRTL: false,
 	defaultButtonText: {
@@ -88,6 +112,8 @@ var defaults = {
 	unselectAuto: true,
 	
 	dropAccept: '*',
+
+	annotations: [],
 
 	eventLimit: false,
 	eventLimitText: 'more',
@@ -356,6 +382,328 @@ function getMomentLocaleData(langCode) {
 // Initialize English by forcing computation of moment-derived options.
 // Also, sets it as the default.
 fc.lang('en', englishDefaults);
+
+;;
+function ResourceManager(options) {
+  var t = this;
+  // exports
+  t.fetchResources = fetchResources;
+  t.setResources = setResources;
+  t.mutateResourceEvent = mutateResourceEvent;
+  // locals
+  var resourceSources = [];
+  var cache;
+  // initialize the resources.
+  setResources(options.resources);
+  // add the resource sources
+
+  function setResources(sources) {
+    resourceSources = [];
+    var resource;
+    if ($.isFunction(sources)) {
+      // is it a function?
+      resource = {
+        resources: sources
+      };
+      resourceSources.push(resource);
+      cache = undefined;
+    } else if (typeof sources == 'string') {
+      // is it a URL string?
+      resource = {
+        url: sources
+      };
+      resourceSources.push(resource);
+      cache = undefined;
+    } else if (typeof sources == 'object' && sources != null) {
+      // is it json object?
+      for (var i = 0; i < sources.length; i++) {
+        var s = sources[i];
+        normalizeSource(s);
+        resource = {
+          resources: s
+        };
+        resourceSources.push(resource);
+      }
+      cache = undefined;
+    }
+  }
+  /**
+   * ----------------------------------------------------------------
+   * Fetch resources from source array
+   * ----------------------------------------------------------------
+   */
+
+  function fetchResources(useCache, currentView) {
+    var resources;
+
+    // if useCache is not defined, default to true
+    if (useCache || useCache === undefined || cache === undefined) {
+      // do a fetch resource from source, rebuild cache
+      cache = [];
+      var len = resourceSources.length;
+      for (var i = 0; i < len; i++) {
+        cache = cache.concat(fetchResourceSource(resourceSources[i], currentView));
+      }
+    }
+
+    if($.isFunction(options.resourceFilter)) {
+      resources = $.grep(cache, options.resourceFilter);
+    }
+    else {
+      resources = cache;
+    }
+
+    if($.isFunction(options.resourceSort)) {
+      //todo! does it need to copy array first?
+      resources.sort(options.resourceSort);
+    }
+
+    return resources;
+  }
+
+  /**
+   * ----------------------------------------------------------------
+   * Fetch resources from each source.  If source is a function, call
+   * the function and return the resource.  If source is a URL, get
+   * the data via synchronized ajax call.  If the source is an
+   * object, return it as is.
+   * ----------------------------------------------------------------
+   */
+
+  function fetchResourceSource(source, currentView) {
+    var resources = source.resources;
+    if (resources) {
+      if ($.isFunction(resources)) {
+        return resources();
+      }
+    } else {
+      var url = source.url;
+      if (url) {
+        var data = {};
+        if (typeof currentView === 'object') {
+          var startParam = options.startParam;
+          var endParam = options.endParam;
+          if (startParam) {
+            data[startParam] = Math.round(+currentView.intervalStart / 1000);
+          }
+          if (endParam) {
+            data[endParam] = Math.round(+currentView.intervalEnd / 1000);
+          }
+        }
+        $.ajax($.extend({}, ajaxDefaults, source, {
+          data: data,
+          dataType: 'json',
+          cache: false,
+          success: function(res) {
+            res = res || [];
+            resources = res;
+          },
+          error: function() {
+            // TODO - need to rewrite callbacks, etc.
+            //alert("ajax error getting json from " + url);
+          },
+          async: false // too much work coordinating callbacks so dumb it down
+        }));
+      }
+    }
+    return resources;
+  }
+  /**
+   * ----------------------------------------------------------------
+   * normalize the source object
+   * ----------------------------------------------------------------
+   */
+
+  function normalizeSource(source) {
+    if (source.className) {
+      if (typeof source.className == 'string') {
+        source.className = source.className.split(/\s+/);
+      }
+    } else {
+      source.className = [];
+    }
+    var normalizers = fc.sourceNormalizers;
+    for (var i = 0; i < normalizers.length; i++) {
+      normalizers[i](source);
+    }
+  }
+
+  /* Event Modification Math
+  -----------------------------------------------------------------------------------------*/
+
+
+  // Modify the date(s) of an event and make this change propagate to all other events with
+  // the same ID (related repeating events).
+  //
+  // If `newStart`/`newEnd` are not specified, the "new" dates are assumed to be `event.start` and `event.end`.
+  // The "old" dates to be compare against are always `event._start` and `event._end` (set by EventManager).
+  //
+  // Returns an object with delta information and a function to undo all operations.
+  //
+  function mutateResourceEvent(event, newResources, newStart, newEnd) {
+    var oldAllDay = event._allDay;
+    var oldStart = event._start;
+    var oldEnd = event._end;
+    var clearEnd = false;
+    var newAllDay;
+    var dateDelta;
+    var durationDelta;
+    var undoFunc;
+
+    // if no new dates were passed in, compare against the event's existing dates
+    if (!newStart && !newEnd) {
+      newStart = event.start;
+      newEnd = event.end;
+    }
+
+    // NOTE: throughout this function, the initial values of `newStart` and `newEnd` are
+    // preserved. These values may be undefined.
+
+    // detect new allDay
+    if (event.allDay != oldAllDay) { // if value has changed, use it
+      newAllDay = event.allDay;
+    }
+    else { // otherwise, see if any of the new dates are allDay
+      newAllDay = !(newStart || newEnd).hasTime();
+    }
+
+    // normalize the new dates based on allDay
+    if (newAllDay) {
+      if (newStart) {
+        newStart = newStart.clone().stripTime();
+      }
+      if (newEnd) {
+        newEnd = newEnd.clone().stripTime();
+      }
+    }
+
+    // compute dateDelta
+    if (newStart) {
+      if (newAllDay) {
+        dateDelta = dayishDiff(newStart, oldStart.clone().stripTime()); // treat oldStart as allDay
+      }
+      else {
+        dateDelta = dayishDiff(newStart, oldStart);
+      }
+    }
+
+    if (newAllDay != oldAllDay) {
+      // if allDay has changed, always throw away the end
+      clearEnd = true;
+    }
+    else if (newEnd) {
+      durationDelta = dayishDiff(
+        // new duration
+        newEnd || t.getDefaultEventEnd(newAllDay, newStart || oldStart),
+        newStart || oldStart
+      ).subtract(dayishDiff(
+        // subtract old duration
+        oldEnd || t.getDefaultEventEnd(oldAllDay, oldStart),
+        oldStart
+      ));
+    }
+
+    undoFunc = mutateResourceEvents(
+      t.clientEvents(event._id), // get events with this ID
+      clearEnd,
+      newAllDay,
+      dateDelta,
+      durationDelta,
+      newResources
+    );
+
+    return {
+      dateDelta: dateDelta,
+      durationDelta: durationDelta,
+      undo: undoFunc
+    };
+  }
+
+
+  // Modifies an array of events in the following ways (operations are in order):
+  // - clear the event's `end`
+  // - convert the event to allDay
+  // - add `dateDelta` to the start and end
+  // - add `durationDelta` to the event's duration
+  //
+  // Returns a function that can be called to undo all the operations.
+  //
+  function mutateResourceEvents(events, clearEnd, forceAllDay, dateDelta, durationDelta, newResources) {
+    var isAmbigTimezone = t.getIsAmbigTimezone();
+    var undoFunctions = [];
+
+    $.each(events, function(i, event) {
+      var oldResources = event.resources;
+      var oldAllDay = event._allDay;
+      var oldStart = event._start;
+      var oldEnd = event._end;
+      var newAllDay = forceAllDay != null ? forceAllDay : oldAllDay;
+      var newStart = oldStart.clone();
+      var newEnd = (!clearEnd && oldEnd) ? oldEnd.clone() : null;
+
+      // NOTE: this function is responsible for transforming `newStart` and `newEnd`,
+      // which were initialized to the OLD values first. `newEnd` may be null.
+
+      // normlize newStart/newEnd to be consistent with newAllDay
+      if (newAllDay) {
+        newStart.stripTime();
+        if (newEnd) {
+          newEnd.stripTime();
+        }
+      }
+      else {
+        if (!newStart.hasTime()) {
+          newStart = t.rezoneDate(newStart);
+        }
+        if (newEnd && !newEnd.hasTime()) {
+          newEnd = t.rezoneDate(newEnd);
+        }
+      }
+
+      // ensure we have an end date if necessary
+      if (!newEnd && (options.forceEventDuration || +durationDelta)) {
+        newEnd = t.getDefaultEventEnd(newAllDay, newStart);
+      }
+
+      // translate the dates
+      newStart.add(dateDelta);
+      if (newEnd) {
+        newEnd.add(dateDelta).add(durationDelta);
+      }
+
+      // if the dates have changed, and we know it is impossible to recompute the
+      // timezone offsets, strip the zone.
+      if (isAmbigTimezone) {
+        if (+dateDelta || +durationDelta) {
+          newStart.stripZone();
+          if (newEnd) {
+            newEnd.stripZone();
+          }
+        }
+      }
+
+      event.allDay = newAllDay;
+      event.start = newStart;
+      event.end = newEnd;
+      event.resources = newResources;
+      backupEventDates(event);
+
+      undoFunctions.push(function() {
+        event.allDay = oldAllDay;
+        event.start = oldStart;
+        event.end = oldEnd;
+        event.resources = oldResources;
+        backupEventDates(event);
+      });
+    });
+
+    return function() {
+      for (var i=0; i<undoFunctions.length; i++) {
+        undoFunctions[i]();
+      }
+    };
+  }
+}
 
 ;;
 
@@ -2142,7 +2490,7 @@ var DragListener = Class.extend({
 	},
 
 
-	// Called when a the mouse has just moved over a new cell
+	// Called when the mouse has just moved over a new cell
 	cellOver: function(cell) {
 		this.cell = cell;
 		this.trigger('cellOver', cell, isCellsEqual(cell, this.origCell));
@@ -2951,6 +3299,7 @@ var Grid = fc.Grid = RowRenderer.extend({
 		var isSelectable = view.opt('selectable');
 		var dayClickCell; // null if invalid dayClick
 		var selectionRange; // null if invalid selection
+		var sourceSeg;
 
 		// this listener tracks a mousedown on a day element, and a subsequent drag.
 		// if the drag ends on the same day, it is a 'dayClick'.
@@ -2965,6 +3314,15 @@ var Grid = fc.Grid = RowRenderer.extend({
 				var origCell = dragListener.origCell;
 				if (origCell) { // click needs to have started on a cell
 					dayClickCell = isOrig ? cell : null; // single-cell selection is a day click
+					if (view.name === 'resourceDay') {
+						sourceSeg = {
+							event: {
+								editable: false,
+								resources: [view.resources()[cell.col].id]
+							}
+						};
+					}
+
 					if (isSelectable) {
 						selectionRange = _this.computeSelection(origCell, cell);
 						if (selectionRange) {
@@ -2988,6 +3346,12 @@ var Grid = fc.Grid = RowRenderer.extend({
 					view.trigger('dayClick', _this.getCellDayEl(dayClickCell), dayClickCell.start, ev);
 				}
 				if (selectionRange) {
+						var resources;
+						if(view.name === 'resourceDay') {
+							resources = $.map(dayEl, function(column) {
+								return view.resources()[ $(column).index()-1 ].id;
+							});
+						}
 					// the selection will already have been rendered. just report it
 					view.reportSelection(selectionRange, ev);
 				}
@@ -3088,8 +3452,20 @@ var Grid = fc.Grid = RowRenderer.extend({
 
 
 	// Renders an emphasis on the given date range. `start` is inclusive. `end` is exclusive.
-	renderHighlight: function(range) {
-		this.renderFill('highlight', this.rangeToSegs(range));
+	renderHighlight: function(start, end, sourceSeg) {
+		var segs = this.rangeToSegs(start, end);
+	//TODO: Resolve this issue 
+	//renderHighlight: function(range) {
+	//	this.renderFill('highlight', this.rangeToSegs(range));
+		var view = this.view;
+
+		if(view.name === "resourceDay") {
+			segs = $.grep(segs, function(seg) {
+				return view.hasResource(sourceSeg.event, view.resources()[seg.leftCol]);
+			});
+		}
+
+		this.renderFill('highlight', segs);
 	},
 
 
@@ -3259,6 +3635,14 @@ var Grid = fc.Grid = RowRenderer.extend({
 		}
 		else {
 			classes.push('fc-future');
+		}
+
+		var annotations = this.view.calendar.option('annotations').day;
+		for(var i=0; i < annotations.length; i++) {
+			var ann = annotations[i];
+			if(ann.cls && ann.start.isSame(date, "day")) {
+				classes.push(ann.cls);
+			}
 		}
 
 		return classes;
@@ -3529,6 +3913,7 @@ Grid.mixin({
 		var el = seg.el;
 		var event = seg.event;
 		var dropLocation;
+		var originalResources;
 
 		// A clone of the original element that will move with the mouse
 		var mouseFollower = new MouseFollower(seg.el, {
@@ -3551,10 +3936,15 @@ Grid.mixin({
 				_this.triggerSegMouseout(seg, ev); // ensure a mouseout on the manipulated event has been reported
 				_this.isDraggingSeg = true;
 				view.hideEvent(event); // hide all event segments. our mouseFollower will take over
+				originalResources = event.resources && event.resources.slice(); // copy the resources;
 				view.trigger('eventDragStart', el[0], event, ev, {}); // last argument is jqui dummy
 			},
 			cellOver: function(cell, isOrig) {
 				var origCell = seg.cell || dragListener.origCell; // starting cell could be forced (DayGrid.limit)
+
+				if (view.name === 'resourceDay') {
+					event.resources = [view.resources()[cell.col].id];
+				}
 
 				dropLocation = _this.computeEventDrop(origCell, cell, event);
 				if (dropLocation) {
@@ -3581,6 +3971,12 @@ Grid.mixin({
 				enableCursor();
 			},
 			dragStop: function(ev) {
+				if (view.name === 'resourceDay') {
+					var sameResources = $(originalResources).not(event.resources).length === 0 &&
+							$(event.resources).not(originalResources).length === 0;
+					hasChanged = hasChanged || !sameResources;
+				}
+
 				// do revert animation if hasn't changed. calls a callback when finished (whether animation or not)
 				mouseFollower.stop(!dropLocation, function() {
 					_this.isDraggingSeg = false;
@@ -4045,12 +4441,22 @@ Grid.mixin({
 	eventRangeToSegs: function(eventRange, rangeToSegsFunc) {
 		var segs;
 		var i, seg;
+		var view = this.view;
 
 		if (rangeToSegsFunc) {
 			segs = rangeToSegsFunc(eventRange);
 		}
 		else {
 			segs = this.rangeToSegs(eventRange); // defined by the subclass
+		}
+
+		if (view.name === 'resourceDay') {
+				// Filters the events according to the resource columns
+				var resources = view.resources();
+
+				segs = $.grep(segs, function(seg, i) {
+					return resources[i] && view.hasResource(eventRange.event, resources[i]);
+				});
 		}
 
 		for (i = 0; i < segs.length; i++) {
@@ -4108,10 +4514,14 @@ function compareNormalRanges(range1, range2) {
 // A cmp function for determining which segments should take visual priority
 // DOES NOT WORK ON INVERTED BACKGROUND EVENTS because they have no eventStartMS/eventDurationMS
 function compareSegs(seg1, seg2) {
-	return seg1.eventStartMS - seg2.eventStartMS || // earlier events go first
+	var data1 = seg1.event || seg1.annotation;
+	var data2 = seg2.event || seg2.annotation;
+
+	return (!!seg2.annotation - !!seg1.annotation) || // annotations always go first
+		seg1.eventStartMS - seg2.eventStartMS || // tie? earlier events go first
 		seg2.eventDurationMS - seg1.eventDurationMS || // tie? longer events go first
-		seg2.event.allDay - seg1.event.allDay || // tie? put all-day events first (booleans cast to 0/1)
-		(seg1.event.title || '').localeCompare(seg2.event.title); // tie? alphabetically by title
+		data2.allDay - data1.allDay || // tie? put all-day events first (booleans cast to 0/1)
+		(data1.title || '').localeCompare(data2.title); // tie? alphabetically by title
 }
 
 fc.compareSegs = compareSegs; // export
@@ -4170,6 +4580,113 @@ function getDraggedElMeta(el) {
 	return { eventProps: eventProps, startTime: startTime, duration: duration, stick: stick };
 }
 
+
+;;
+
+/* annotation-rendering and annotation-interaction methods for the abstract Grid class
+----------------------------------------------------------------------------------------------------------------------*/
+
+$.extend(Grid.prototype, {
+
+
+	// Converts an array of annotation objects into an array of segment objects
+	annotationsToSegs: function(annotations, intervalStart, intervalEnd) {
+		var _this = this;
+
+		return $.map(annotations, function(annotation) {
+			return _this.annotationToSegs(annotation, intervalStart, intervalEnd); // $.map flattens all returned arrays together
+		});
+	},
+
+
+	// Slices a single annotation into an array of annotation segments.
+	// When `intervalStart` and `intervalEnd` are specified, intersect the annotations with that interval.
+	// Otherwise, let the subclass decide how it wants to slice the segments over the grid.
+	annotationToSegs: function(annotation, intervalStart, intervalEnd) {
+		var annotationStart = annotation.start.clone().stripZone(); // normalize
+		var annotationEnd = this.view.calendar.getEventEnd(annotation).stripZone(); // compute (if necessary) and normalize
+		var segs;
+		var i, seg;
+
+		if (intervalStart && intervalEnd) {
+			seg = intersectionToSeg(annotationStart, annotationEnd, intervalStart, intervalEnd);
+			segs = seg ? [ seg ] : [];
+		}
+		else {
+			segs = this.rangeToSegs(annotationStart, annotationEnd); // defined by the subclass
+		}
+
+		// assign extra annotation-related properties to the segment objects
+		for (i = 0; i < segs.length; i++) {
+			seg = segs[i];
+			seg.annotation = annotation;
+			seg.eventStartMS = +annotationStart;
+			seg.eventDurationMS = annotationEnd - annotationStart;
+		}
+
+		return segs;
+	},
+
+	// Renders a `el` property for each seg, and only returns segments that successfully rendered
+	renderAnnotations: function(annotations, disableResizing) {
+		var html = '';
+		var renderedAnns = [];
+		var i;
+
+		// build a large concatenation of annotation segment HTML
+		for (i = 0; i < annotations.length; i++) {
+			html += this.renderAnnotationHtml(annotations[i], disableResizing);
+		}
+
+		// Grab individual elements from the combined HTML string. Use each as the default rendering.
+		// Then, compute the 'el' for each segment. An el might be null if the eventRender callback returned false.
+		$(html).each(function(i, node) {
+			annotations[i].el = $(node);
+			renderedAnns.push(annotations[i]);
+		});
+
+		return renderedAnns;
+	},
+
+		// Builds the HTML to be used for the default element for an individual segment
+	renderAnnotationHtml: function(seg, disableResizing) {
+		var view = this.view;
+		var isRTL = view.opt('isRTL');
+		var annotation = seg.annotation;
+		var classes = ['fc-annotation'].concat(annotation.cls);
+		var skinCss = this.getEventSkinCss(annotation);
+		var timeHtml = '';
+		var titleHtml;
+
+		// Only display a timed events time if it is the starting segment
+		if (!annotation.allDay && seg.isStart) {
+			timeHtml = '<span class="fc-time">' + htmlEscape(view.getEventTimeText(annotation)) + '</span>';
+		}
+
+		titleHtml =
+			'<span class="fc-title">' +
+				(htmlEscape(annotation.title || '') || '&nbsp;') + // we always want one line of height
+			'</span>';
+
+		return '<a class="' + classes.join(' ') + '"' +
+				(annotation.url ?
+					' href="' + htmlEscape(annotation.url) + '"' :
+					''
+					) +
+				(skinCss ?
+					' style="' + skinCss + '"' :
+					''
+					) +
+			'>' +
+				'<div class="fc-content">' +
+					(isRTL ?
+						titleHtml + ' ' + timeHtml : // put a natural space in between
+						timeHtml + ' ' + titleHtml   //
+						) +
+				'</div></a>';
+	}
+
+});
 
 ;;
 
@@ -4487,6 +5004,7 @@ var DayGrid = Grid.extend({
 		// always render a highlight underneath
 		this.renderHighlight(
 			this.view.calendar.ensureVisibleEventRange(dropLocation) // needs to be a proper range
+
 		);
 
 		// if a segment from the same calendar but another component is being dragged, render a helper event
@@ -4715,10 +5233,16 @@ DayGrid.mixin({
 	// PRECONDITION: each segment shoud already have a rendered and assigned `.el`
 	renderSegRows: function(segs) {
 		var rowStructs = [];
+		var annotations = [];
 		var segRows;
 		var row;
 
-		segRows = this.groupSegRows(segs); // group into nested arrays
+		if(this.view.name !== 'resourceDay') {
+			annotations = this.annotationsToSegs(this.view.calendar.option('annotations').day);
+		}
+
+		annotations = this.renderAnnotations(annotations); // returns a new array with only visible annotations
+		segRows = this.groupSegRows(segs.concat(annotations)); // group into nested arrays
 
 		// iterate each row of segment groupings
 		for (row = 0; row < segRows.length; row++) {
@@ -5339,6 +5863,7 @@ var TimeGrid = Grid.extend({
 		this.slatEls = this.el.find('.fc-slats tr');
 
 		this.computeSlatTops();
+
 		this.renderBusinessHours();
 		Grid.prototype.render.call(this); // call the super-method
 	},
@@ -5847,11 +6372,14 @@ TimeGrid.mixin({
 	renderSegTable: function(segs) {
 		var tableEl = $('<table><tr/></table>');
 		var trEl = tableEl.find('tr');
+		var annotations = this.annotationsToSegs(this.view.calendar.option('annotations').timed);
 		var segCols;
 		var i, seg;
 		var col, colSegs;
 		var containerEl;
 
+		annotations = this.renderAnnotations(annotations); // returns a new array with only visible annotations
+		segs = segs.concat(annotations);
 		segCols = this.groupSegCols(segs); // group into sub-arrays, and assigns 'col' to each seg
 
 		this.computeSegVerticals(segs); // compute and assign top/bottom
@@ -6506,11 +7034,15 @@ var View = fc.View = Class.extend({
 	// Refreshes the vertical dimensions of the calendar
 	updateHeight: function() {
 		var calendar = this.calendar; // we poll the calendar for height information
+		var that = this;
 
-		this.setHeight(
-			calendar.getSuggestedViewHeight(),
-			calendar.isHeightAuto()
-		);
+		setTimeout(function() {
+			that.setHeight(
+				calendar.getSuggestedViewHeight(),
+				calendar.isHeightAuto()
+			);
+		});
+
 	},
 
 
@@ -6649,7 +7181,8 @@ var View = fc.View = Class.extend({
 		var i;
 
 		for (i = 0; i < segs.length; i++) {
-			if (!event || segs[i].event._id === event._id) {
+			var data = segs[i].event || segs[i].annotation;
+			if (!event || data._id === event._id) {
 				func.call(this, segs[i]);
 			}
 		}
@@ -6950,7 +7483,7 @@ var View = fc.View = Class.extend({
 
 ;;
 
- 
+
 function Calendar(element, instanceOptions) {
 	var t = this;
 
@@ -6982,7 +7515,6 @@ function Calendar(element, instanceOptions) {
 	}
 
 
-	
 	// Exports
 	// -----------------------------------------------------------------------------------
 
@@ -7135,7 +7667,7 @@ function Calendar(element, instanceOptions) {
 	};
 
 
-	// Given an event's allDay status and start date, return swhat its fallback end date should be.
+	// Given an event's allDay status and start date, return what its fallback end date should be.
 	t.getDefaultEventEnd = function(allDay, start) { // TODO: rename to computeDefaultEventEnd
 		var end = start.clone();
 
@@ -7162,12 +7694,13 @@ function Calendar(element, instanceOptions) {
 	}
 
 
-	
+
 	// Imports
 	// -----------------------------------------------------------------------------------
 
 
 	EventManager.call(t, options);
+	ResourceManager.call(t, options);
 	var isFetchNeeded = t.isFetchNeeded;
 	var fetchEvents = t.fetchEvents;
 
@@ -7189,9 +7722,9 @@ function Calendar(element, instanceOptions) {
 	var ignoreWindowResize = 0;
 	var date;
 	var events = [];
-	
-	
-	
+
+
+
 	// Main Rendering
 	// -----------------------------------------------------------------------------------
 
@@ -7202,8 +7735,33 @@ function Calendar(element, instanceOptions) {
 	else {
 		date = t.getNow();
 	}
-	
-	
+
+	if (options.annotations) { // prepare annotations object
+		var annotations = { day: [], timed: [] };
+
+		// separate the annotations into all-day and timed
+		for (var i = 0; i < options.annotations.length; i++) {
+			var annotation = options.annotations[i];
+
+			if(annotation.start) {
+				annotation.start = t.moment(annotation.start);
+			}
+
+			if(annotation.end) {
+				annotation.end = t.moment(annotation.end);
+			}
+
+			if (annotation.allDay) {
+				annotations.day.push(annotation);
+			} else {
+				annotations.timed.push(annotation);
+			}
+		}
+
+		options.annotations = annotations;
+	}
+
+
 	function render(inc) {
 		if (!content) {
 			initialRender();
@@ -7214,8 +7772,8 @@ function Calendar(element, instanceOptions) {
 			renderView(inc);
 		}
 	}
-	
-	
+
+
 	function initialRender() {
 		tm = options.theme ? 'ui' : 'fc';
 		element.addClass('fc');
@@ -7249,8 +7807,8 @@ function Calendar(element, instanceOptions) {
 			$(window).resize(windowResizeProxy);
 		}
 	}
-	
-	
+
+
 	function destroy() {
 
 		if (currentView) {
@@ -7263,13 +7821,13 @@ function Calendar(element, instanceOptions) {
 
 		$(window).unbind('resize', windowResizeProxy);
 	}
-	
-	
+
+
 	function elementVisible() {
 		return element.is(':visible');
 	}
-	
-	
+
+
 
 	// View Rendering
 	// -----------------------------------------------------------------------------------
@@ -7284,9 +7842,18 @@ function Calendar(element, instanceOptions) {
 	function renderView(delta, viewType) {
 		ignoreWindowResize++;
 
+		// if forcing the rendering, pretend we are changing the view
+		if (delta === true) {
+			viewName = viewName || currentView.name;
+			currentView.name = delta = undefined;
+		}
+
 		// if viewType is changing, destroy the old view
 		if (currentView && viewType && currentView.type !== viewType) {
 			header.deactivateButton(currentView.type);
+			currentView.name = delta = undefined;
+		}
+
 			freezeContentHeight(); // prevent a scroll jump when view element is removed
 			if (currentView.start) { // rendered before?
 				currentView.destroyView();
@@ -7440,8 +8007,8 @@ function Calendar(element, instanceOptions) {
 			return spec.buttonText;
 		}
 	}
-	
-	
+
+
 
 	// Resizing
 	// -----------------------------------------------------------------------------------
@@ -7458,8 +8025,8 @@ function Calendar(element, instanceOptions) {
 	t.isHeightAuto = function() {
 		return options.contentHeight === 'auto' || options.height === 'auto';
 	};
-	
-	
+
+
 	function updateSize(shouldRecalc) {
 		if (elementVisible()) {
 
@@ -7481,8 +8048,8 @@ function Calendar(element, instanceOptions) {
 			_calcSize();
 		}
 	}
-	
-	
+
+
 	function _calcSize() { // assumes elementVisible
 		if (typeof options.contentHeight === 'number') { // exists and not 'auto'
 			suggestedViewHeight = options.contentHeight;
@@ -7497,8 +8064,8 @@ function Calendar(element, instanceOptions) {
 			suggestedViewHeight = Math.round(content.width() / Math.max(options.aspectRatio, 0.5));
 		}
 	}
-	
-	
+
+
 	function windowResize(ev) {
 		if (
 			!ignoreWindowResize &&
@@ -7510,9 +8077,9 @@ function Calendar(element, instanceOptions) {
 			}
 		}
 	}
-	
-	
-	
+
+
+
 	/* Event Fetching/Rendering
 	-----------------------------------------------------------------------------*/
 	// TODO: going forward, most of this stuff should be directly handled by the view
@@ -7528,7 +8095,15 @@ function Calendar(element, instanceOptions) {
 		if (elementVisible()) {
 			freezeContentHeight();
 			currentView.destroyViewEvents(); // no performance cost if never rendered
-			currentView.renderViewEvents(events);
+			currentView.renderViewEvents($.grep(events, function(event) {
+			var end = event.end;
+
+			if(!end) {
+				end = currentView.calendar.getEventEnd(event);
+			}
+
+				return end > currentView.start && event.start < currentView.end;
+			}));
 			unfreezeContentHeight();
 		}
 	}
@@ -7539,7 +8114,7 @@ function Calendar(element, instanceOptions) {
 		currentView.destroyViewEvents();
 		unfreezeContentHeight();
 	}
-	
+
 
 	function getAndRenderEvents() {
 		if (!options.lazyFetching || isFetchNeeded(currentView.start, currentView.end)) {
@@ -7557,7 +8132,7 @@ function Calendar(element, instanceOptions) {
 			// ... which will call renderEvents
 	}
 
-	
+
 	// called when event data arrives
 	function reportEvents(_events) {
 		events = _events;
@@ -7590,12 +8165,12 @@ function Calendar(element, instanceOptions) {
 			header.enableButton('today');
 		}
 	}
-	
+
 
 
 	/* Selection
 	-----------------------------------------------------------------------------*/
-	
+
 
 	function select(start, end) {
 
@@ -7612,54 +8187,54 @@ function Calendar(element, instanceOptions) {
 
 		currentView.select({ start: start, end: end }); // accepts a range
 	}
-	
+
 
 	function unselect() { // safe to be called before renderView
 		if (currentView) {
 			currentView.unselect();
 		}
 	}
-	
-	
-	
+
+
+
 	/* Date
 	-----------------------------------------------------------------------------*/
-	
-	
+
+
 	function prev() {
 		renderView(-1);
 	}
-	
-	
+
+
 	function next() {
 		renderView(1);
 	}
-	
-	
+
+
 	function prevYear() {
 		date.add(-1, 'years');
 		renderView();
 	}
-	
-	
+
+
 	function nextYear() {
 		date.add(1, 'years');
 		renderView();
 	}
-	
-	
+
+
 	function today() {
 		date = t.getNow();
 		renderView();
 	}
-	
-	
+
+
 	function gotoDate(dateInput) {
 		date = t.moment(dateInput);
 		renderView();
 	}
-	
-	
+
+
 	function incrementDate(delta) {
 		date.add(moment.duration(delta));
 		renderView();
@@ -7690,8 +8265,8 @@ function Calendar(element, instanceOptions) {
 		date = newDate;
 		changeView(viewType);
 	}
-	
-	
+
+
 	function getDate() {
 		return date.clone();
 	}
@@ -7718,23 +8293,23 @@ function Calendar(element, instanceOptions) {
 			overflow: ''
 		});
 	}
-	
-	
-	
+
+
+
 	/* Misc
 	-----------------------------------------------------------------------------*/
-	
+
 
 	function getCalendar() {
 		return t;
 	}
 
-	
+
 	function getView() {
 		return currentView;
 	}
-	
-	
+
+
 	function option(name, value) {
 		if (value === undefined) {
 			return options[name];
@@ -7744,8 +8319,8 @@ function Calendar(element, instanceOptions) {
 			updateSize(true); // true = allow recalculation of height
 		}
 	}
-	
-	
+
+
 	function trigger(name, thisObj) {
 		if (options[name]) {
 			return options[name].apply(
@@ -7754,8 +8329,6 @@ function Calendar(element, instanceOptions) {
 			);
 		}
 	}
-
-}
 
 ;;
 
@@ -8480,6 +9053,11 @@ function EventManager(options) { // assumed to be a calendar
 		}
 		else {
 			out.className = [];
+		}
+
+		out.resources = out.resources || [];
+		if (typeof out.resources == 'string') {
+			out.resources = out.resources.split(/\s+/);
 		}
 
 		start = input.start || input.date; // "date" is an alias for "start"
@@ -10205,6 +10783,115 @@ fcViews.listMonth = {
 	type: 'list',
 	duration: { weeks: 4 }
 };
+
+;;
+
+function ResourceView(calendar) {
+	AgendaView.call(this, calendar); // call the super-constructor
+
+	this.cellToDate = function() {
+		return this.start.clone();
+	};
+}
+
+
+ResourceView.prototype = createObject(AgendaView.prototype); // extends AgendaView
+$.extend(ResourceView.prototype, {
+
+	resources: function() {
+		this._resources = this._resources || this.calendar.fetchResources();
+		return this._resources;
+	},
+
+	hasResource: function(event, resource) {
+		if(this.opt('hasResource')) {
+			return this.opt('hasResource').apply(this, arguments);
+		}
+		
+		return event.resources && $.grep(event.resources, function(id) {
+			return id == resource.id;
+		}).length;
+	},
+
+	// Called when a new selection is made. Updates internal state and triggers handlers.
+	reportSelection: function(start, end, ev, resources) {
+		this.isSelected = true;
+
+		this.calendar.trigger.apply(
+			this.calendar, ['select', this, start, end, ev, this, resources]
+		);
+	},
+
+	// Used by the `headHtml` method, via RowRenderer, for rendering the HTML of a day-of-week header cell
+	headCellHtml: function(row, col, date) {
+		var resource = this.resources()[col];
+		var classes = [
+			'fc-day-header',
+			this.widgetHeaderClass,
+			'fc-' + dayIDs[date.day()]
+		];
+
+		if(resource) {
+			classes.push(resource.className);
+		}
+
+		return '' +
+			'<th class="'+ classes.join(' ') +'">' +
+			((resource) ? htmlEscape(resource.name) : '') +
+			'</th>';
+	}
+
+});
+
+;;
+
+/* A day view with an all-day cell area at the top, and a time grid below by resource
+----------------------------------------------------------------------------------------------------------------------*/
+
+fcViews.resourceDay = ResourceDayView;
+
+function ResourceDayView(calendar) {
+	ResourceView.call(this, calendar); // call the super-constructor
+
+	var superRangeToSegments = this.rangeToSegments;
+	this.rangeToSegments = function(start, end) {
+		var colCnt = this.colCnt;
+		var segments = [];
+
+		$.each(superRangeToSegments(start, end), function(index, segment) {
+			for (var col=0; col<colCnt; col++) {
+				segments.push({
+					row: segment.row,
+					leftCol: col,
+					rightCol: col,
+					isStart: segment.isStart,
+					isEnd: segment.isEnd
+				});
+			}
+		});
+		return segments;
+	};
+}
+
+ResourceDayView.prototype = createObject(ResourceView.prototype); // define the super-class
+$.extend(ResourceDayView.prototype, {
+
+	name: 'resourceDay',
+
+	incrementDate: function(date, delta) {
+		return AgendaDayView.prototype.incrementDate.apply(this, arguments);
+	},
+
+	render: function(date) {
+		this.start = this.intervalStart = date.clone().stripTime();
+		this.end = this.intervalEnd = this.start.clone().add(1, 'days');
+
+		this.title = this.calendar.formatDate(this.start, this.opt('titleFormat'));
+
+		AgendaView.prototype.render.call(this, this.resources().length || 1); // call the super-method
+	}
+
+});
 
 ;;
 
