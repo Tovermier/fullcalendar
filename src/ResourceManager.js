@@ -194,10 +194,10 @@ function ResourceManager(options) {
     // compute dateDelta
     if (newStart) {
       if (newAllDay) {
-        dateDelta = dayishDiff(newStart, oldStart.clone().stripTime()); // treat oldStart as allDay
+        dateDelta = diffDayTime(newStart, oldStart.clone().stripTime()); // treat oldStart as allDay
       }
       else {
-        dateDelta = dayishDiff(newStart, oldStart);
+        dateDelta = diffDayTime(newStart, oldStart);
       }
     }
 
@@ -206,11 +206,11 @@ function ResourceManager(options) {
       clearEnd = true;
     }
     else if (newEnd) {
-      durationDelta = dayishDiff(
+      durationDelta = diffDayTime(
         // new duration
         newEnd || t.getDefaultEventEnd(newAllDay, newStart || oldStart),
         newStart || oldStart
-      ).subtract(dayishDiff(
+      ).subtract(diffDayTime(
         // subtract old duration
         oldEnd || t.getDefaultEventEnd(oldAllDay, oldStart),
         oldStart

@@ -39,9 +39,9 @@ var defaults = {
 
 	weekNumberTitle: 'W',
 	weekNumberCalculation: 'local',
-	
+
 	//editable: false,
-	
+
 	// event ajax
 	lazyFetching: true,
 	startParam: 'start',
@@ -51,7 +51,7 @@ var defaults = {
 	timezone: false,
 
 	//allDayDefault: undefined,
-	//TODO: Check this area from here down to 
+	//TODO: Check this area from here down to
 	// time formats
 	titleFormat: {
 		month: 'MMMM YYYY', // like "September 1986". each language will override this
@@ -59,21 +59,12 @@ var defaults = {
 		day: 'LL', // like "September 4 1986"
 		resourceDay: 'LL - dddd' // like "September 4 1986 - Monday"
 	},
-	columnFormat: {
-		month: 'ddd', // like "Sat"
-		week: generateWeekColumnFormat,
-		day: 'dddd' // like "Saturday"
-	},
-	timeFormat: { // for event elements
-		'default': generateShortTimeFormat
-	},
-
 	displayEventEnd: {
 		month: false,
 		basicWeek: false,
 		'default': true
 	},
-	
+
 	//TODO: down to here
 	// locale
 	isRTL: false,
@@ -94,7 +85,7 @@ var defaults = {
 		prevYear: 'left-double-arrow',
 		nextYear: 'right-double-arrow'
 	},
-	
+
 	// jquery-ui theming
 	theme: false,
 	themeButtonIcons: {
@@ -107,10 +98,10 @@ var defaults = {
 	dragOpacity: .75,
 	dragRevertDuration: 500,
 	dragScroll: true,
-	
+
 	//selectable: false,
 	unselectAuto: true,
-	
+
 	dropAccept: '*',
 
 	annotations: [],
@@ -119,10 +110,10 @@ var defaults = {
 	eventLimitText: 'more',
 	eventLimitClick: 'popover',
 	dayPopoverFormat: 'LL',
-	
+
 	handleWindowResize: true,
 	windowResizeDelay: 200 // milliseconds before an updateSize happens
-	
+
 };
 
 
@@ -580,10 +571,10 @@ function ResourceManager(options) {
     // compute dateDelta
     if (newStart) {
       if (newAllDay) {
-        dateDelta = dayishDiff(newStart, oldStart.clone().stripTime()); // treat oldStart as allDay
+        dateDelta = diffDayTime(newStart, oldStart.clone().stripTime()); // treat oldStart as allDay
       }
       else {
-        dateDelta = dayishDiff(newStart, oldStart);
+        dateDelta = diffDayTime(newStart, oldStart);
       }
     }
 
@@ -592,11 +583,11 @@ function ResourceManager(options) {
       clearEnd = true;
     }
     else if (newEnd) {
-      durationDelta = dayishDiff(
+      durationDelta = diffDayTime(
         // new duration
         newEnd || t.getDefaultEventEnd(newAllDay, newStart || oldStart),
         newStart || oldStart
-      ).subtract(dayishDiff(
+      ).subtract(diffDayTime(
         // subtract old duration
         oldEnd || t.getDefaultEventEnd(oldAllDay, oldStart),
         oldStart
@@ -3341,9 +3332,9 @@ var Grid = fc.Grid = RowRenderer.extend({
 				enableCursor();
 			},
 			listenStop: function(ev) {
+				var dayEl = _this.getCellDayEl(dayClickCell);
 				if (dayClickCell) {
-					ev.preventDefault(); //fixes double click on Android
-					view.trigger('dayClick', _this.getCellDayEl(dayClickCell), dayClickCell.start, ev);
+					view.trigger('dayClick', dayEl, dayClickCell.start, ev);
 				}
 				if (selectionRange) {
 						var resources;
@@ -3454,7 +3445,7 @@ var Grid = fc.Grid = RowRenderer.extend({
 	// Renders an emphasis on the given date range. `start` is inclusive. `end` is exclusive.
 	renderHighlight: function(start, end, sourceSeg) {
 		var segs = this.rangeToSegs(start, end);
-	//TODO: Resolve this issue 
+	//TODO: Resolve this issue
 	//renderHighlight: function(range) {
 	//	this.renderFill('highlight', this.rangeToSegs(range));
 		var view = this.view;
@@ -3841,7 +3832,7 @@ Grid.mixin({
 		var view = this.view;
 
 		var events = {};
-		
+
 		events.mouseenter = function(seg, ev) {
 			_this.triggerSegMouseover(seg, ev);
 		};
@@ -3913,6 +3904,7 @@ Grid.mixin({
 		var el = seg.el;
 		var event = seg.event;
 		var dropLocation;
+		var newStart, newEnd;
 		var originalResources;
 
 		// A clone of the original element that will move with the mouse
@@ -3941,6 +3933,9 @@ Grid.mixin({
 			},
 			cellOver: function(cell, isOrig) {
 				var origCell = seg.cell || dragListener.origCell; // starting cell could be forced (DayGrid.limit)
+				//NOTE: Be VERY suspicious of this if weird errors pop up
+				newStart = cell.start;
+				newEnd = cell.end;
 
 				if (view.name === 'resourceDay') {
 					event.resources = [view.resources()[cell.col].id];
@@ -3960,17 +3955,21 @@ Grid.mixin({
 				}
 				else {
 					// have the helper follow the mouse (no snapping) with a warning-style cursor
+					newStart = null; // mark an invalid drop date
 					mouseFollower.show();
 					disableCursor();
 				}
 			},
 			cellOut: function() { // called before mouse moves to a different cell OR moved out of all cells
 				dropLocation = null;
+				newStart = null;
 				view.destroyDrag(); // unrender whatever was done in renderDrag
 				mouseFollower.show(); // show in case we are moving out of all cells
 				enableCursor();
 			},
 			dragStop: function(ev) {
+				var hasChanged = newStart && !newStart.isSame(event.start);
+
 				if (view.name === 'resourceDay') {
 					var sameResources = $(originalResources).not(event.resources).length === 0 &&
 							$(event.resources).not(originalResources).length === 0;
@@ -4579,7 +4578,6 @@ function getDraggedElMeta(el) {
 
 	return { eventProps: eventProps, startTime: startTime, duration: duration, stick: stick };
 }
-
 
 ;;
 
@@ -7844,7 +7842,7 @@ function Calendar(element, instanceOptions) {
 
 		// if forcing the rendering, pretend we are changing the view
 		if (delta === true) {
-			viewName = viewName || currentView.name;
+			viewType = viewType || currentView.name;
 			currentView.name = delta = undefined;
 		}
 
@@ -7854,13 +7852,12 @@ function Calendar(element, instanceOptions) {
 			currentView.name = delta = undefined;
 		}
 
-			freezeContentHeight(); // prevent a scroll jump when view element is removed
-			if (currentView.start) { // rendered before?
-				currentView.destroyView();
-			}
-			currentView.el.remove();
-			currentView = null;
+		freezeContentHeight(); // prevent a scroll jump when view element is removed
+		if (currentView.start) { // rendered before?
+			currentView.destroyView();
 		}
+		currentView.el.remove();
+		currentView = null;
 
 		// if viewType changed, or the view was never created, create a fresh view
 		if (!currentView && viewType) {
@@ -8323,12 +8320,10 @@ function Calendar(element, instanceOptions) {
 
 	function trigger(name, thisObj) {
 		if (options[name]) {
-			return options[name].apply(
-				thisObj || _element,
-				Array.prototype.slice.call(arguments, 2)
-			);
+			return options[name].apply(thisObj || _element,Array.prototype.slice.call(arguments, 2));
 		}
 	}
+}
 
 ;;
 
@@ -10787,7 +10782,7 @@ fcViews.listMonth = {
 ;;
 
 function ResourceView(calendar) {
-	AgendaView.call(this, calendar); // call the super-constructor
+	fcViews.agenda.call(this, calendar); // call the super-constructor
 
 	this.cellToDate = function() {
 		return this.start.clone();
@@ -10795,7 +10790,7 @@ function ResourceView(calendar) {
 }
 
 
-ResourceView.prototype = createObject(AgendaView.prototype); // extends AgendaView
+ResourceView.prototype = createObject(fcViews.agenda.prototype); // extends AgendaView
 $.extend(ResourceView.prototype, {
 
 	resources: function() {
@@ -10807,7 +10802,7 @@ $.extend(ResourceView.prototype, {
 		if(this.opt('hasResource')) {
 			return this.opt('hasResource').apply(this, arguments);
 		}
-		
+
 		return event.resources && $.grep(event.resources, function(id) {
 			return id == resource.id;
 		}).length;
@@ -10879,7 +10874,7 @@ $.extend(ResourceDayView.prototype, {
 	name: 'resourceDay',
 
 	incrementDate: function(date, delta) {
-		return AgendaDayView.prototype.incrementDate.apply(this, arguments);
+		return fcViews.agendaDay.prototype.incrementDate.apply(this, arguments);
 	},
 
 	render: function(date) {
@@ -10888,7 +10883,7 @@ $.extend(ResourceDayView.prototype, {
 
 		this.title = this.calendar.formatDate(this.start, this.opt('titleFormat'));
 
-		AgendaView.prototype.render.call(this, this.resources().length || 1); // call the super-method
+		fcViews.agenda.prototype.render.call(this, this.resources().length || 1); // call the super-method
 	}
 
 });

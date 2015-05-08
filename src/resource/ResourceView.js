@@ -1,6 +1,6 @@
 
 function ResourceView(calendar) {
-	AgendaView.call(this, calendar); // call the super-constructor
+	fcViews.agenda.call(this, calendar); // call the super-constructor
 
 	this.cellToDate = function() {
 		return this.start.clone();
@@ -8,7 +8,7 @@ function ResourceView(calendar) {
 }
 
 
-ResourceView.prototype = createObject(AgendaView.prototype); // extends AgendaView
+ResourceView.prototype = createObject(fcViews.agenda.prototype); // extends AgendaView
 $.extend(ResourceView.prototype, {
 
 	resources: function() {
@@ -20,7 +20,7 @@ $.extend(ResourceView.prototype, {
 		if(this.opt('hasResource')) {
 			return this.opt('hasResource').apply(this, arguments);
 		}
-		
+
 		return event.resources && $.grep(event.resources, function(id) {
 			return id == resource.id;
 		}).length;

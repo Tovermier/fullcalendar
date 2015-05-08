@@ -23,9 +23,9 @@ var defaults = {
 
 	weekNumberTitle: 'W',
 	weekNumberCalculation: 'local',
-	
+
 	//editable: false,
-	
+
 	// event ajax
 	lazyFetching: true,
 	startParam: 'start',
@@ -35,7 +35,7 @@ var defaults = {
 	timezone: false,
 
 	//allDayDefault: undefined,
-	//TODO: Check this area from here down to 
+	//TODO: Check this area from here down to
 	// time formats
 	titleFormat: {
 		month: 'MMMM YYYY', // like "September 1986". each language will override this
@@ -43,21 +43,12 @@ var defaults = {
 		day: 'LL', // like "September 4 1986"
 		resourceDay: 'LL - dddd' // like "September 4 1986 - Monday"
 	},
-	columnFormat: {
-		month: 'ddd', // like "Sat"
-		week: generateWeekColumnFormat,
-		day: 'dddd' // like "Saturday"
-	},
-	timeFormat: { // for event elements
-		'default': generateShortTimeFormat
-	},
-
 	displayEventEnd: {
 		month: false,
 		basicWeek: false,
 		'default': true
 	},
-	
+
 	//TODO: down to here
 	// locale
 	isRTL: false,
@@ -78,7 +69,7 @@ var defaults = {
 		prevYear: 'left-double-arrow',
 		nextYear: 'right-double-arrow'
 	},
-	
+
 	// jquery-ui theming
 	theme: false,
 	themeButtonIcons: {
@@ -91,10 +82,10 @@ var defaults = {
 	dragOpacity: .75,
 	dragRevertDuration: 500,
 	dragScroll: true,
-	
+
 	//selectable: false,
 	unselectAuto: true,
-	
+
 	dropAccept: '*',
 
 	annotations: [],
@@ -103,10 +94,10 @@ var defaults = {
 	eventLimitText: 'more',
 	eventLimitClick: 'popover',
 	dayPopoverFormat: 'LL',
-	
+
 	handleWindowResize: true,
 	windowResizeDelay: 200 // milliseconds before an updateSize happens
-	
+
 };
 
 

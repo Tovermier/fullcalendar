@@ -306,9 +306,9 @@ var Grid = fc.Grid = RowRenderer.extend({
 				enableCursor();
 			},
 			listenStop: function(ev) {
+				var dayEl = _this.getCellDayEl(dayClickCell);
 				if (dayClickCell) {
-					ev.preventDefault(); //fixes double click on Android
-					view.trigger('dayClick', _this.getCellDayEl(dayClickCell), dayClickCell.start, ev);
+					view.trigger('dayClick', dayEl, dayClickCell.start, ev);
 				}
 				if (selectionRange) {
 						var resources;
@@ -419,7 +419,7 @@ var Grid = fc.Grid = RowRenderer.extend({
 	// Renders an emphasis on the given date range. `start` is inclusive. `end` is exclusive.
 	renderHighlight: function(start, end, sourceSeg) {
 		var segs = this.rangeToSegs(start, end);
-	//TODO: Resolve this issue 
+	//TODO: Resolve this issue
 	//renderHighlight: function(range) {
 	//	this.renderFill('highlight', this.rangeToSegs(range));
 		var view = this.view;

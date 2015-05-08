@@ -33,7 +33,7 @@ $.extend(ResourceDayView.prototype, {
 	name: 'resourceDay',
 
 	incrementDate: function(date, delta) {
-		return AgendaDayView.prototype.incrementDate.apply(this, arguments);
+		return fcViews.agendaDay.prototype.incrementDate.apply(this, arguments);
 	},
 
 	render: function(date) {
@@ -42,7 +42,7 @@ $.extend(ResourceDayView.prototype, {
 
 		this.title = this.calendar.formatDate(this.start, this.opt('titleFormat'));
 
-		AgendaView.prototype.render.call(this, this.resources().length || 1); // call the super-method
+		fcViews.agenda.prototype.render.call(this, this.resources().length || 1); // call the super-method
 	}
 
 });

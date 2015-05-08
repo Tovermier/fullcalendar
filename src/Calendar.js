@@ -360,7 +360,7 @@ function Calendar(element, instanceOptions) {
 
 		// if forcing the rendering, pretend we are changing the view
 		if (delta === true) {
-			viewName = viewName || currentView.name;
+			viewType = viewType || currentView.name;
 			currentView.name = delta = undefined;
 		}
 
@@ -370,13 +370,12 @@ function Calendar(element, instanceOptions) {
 			currentView.name = delta = undefined;
 		}
 
-			freezeContentHeight(); // prevent a scroll jump when view element is removed
-			if (currentView.start) { // rendered before?
-				currentView.destroyView();
-			}
-			currentView.el.remove();
-			currentView = null;
+		freezeContentHeight(); // prevent a scroll jump when view element is removed
+		if (currentView.start) { // rendered before?
+			currentView.destroyView();
 		}
+		currentView.el.remove();
+		currentView = null;
 
 		// if viewType changed, or the view was never created, create a fresh view
 		if (!currentView && viewType) {
@@ -839,9 +838,7 @@ function Calendar(element, instanceOptions) {
 
 	function trigger(name, thisObj) {
 		if (options[name]) {
-			return options[name].apply(
-				thisObj || _element,
-				Array.prototype.slice.call(arguments, 2)
-			);
+			return options[name].apply(thisObj || _element,Array.prototype.slice.call(arguments, 2));
 		}
 	}
+}

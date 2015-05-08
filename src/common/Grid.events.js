@@ -188,7 +188,7 @@ Grid.mixin({
 		var view = this.view;
 
 		var events = {};
-		
+
 		events.mouseenter = function(seg, ev) {
 			_this.triggerSegMouseover(seg, ev);
 		};
@@ -260,6 +260,7 @@ Grid.mixin({
 		var el = seg.el;
 		var event = seg.event;
 		var dropLocation;
+		var newStart, newEnd;
 		var originalResources;
 
 		// A clone of the original element that will move with the mouse
@@ -288,6 +289,9 @@ Grid.mixin({
 			},
 			cellOver: function(cell, isOrig) {
 				var origCell = seg.cell || dragListener.origCell; // starting cell could be forced (DayGrid.limit)
+				//NOTE: Be VERY suspicious of this if weird errors pop up
+				newStart = cell.start;
+				newEnd = cell.end;
 
 				if (view.name === 'resourceDay') {
 					event.resources = [view.resources()[cell.col].id];
@@ -307,17 +311,21 @@ Grid.mixin({
 				}
 				else {
 					// have the helper follow the mouse (no snapping) with a warning-style cursor
+					newStart = null; // mark an invalid drop date
 					mouseFollower.show();
 					disableCursor();
 				}
 			},
 			cellOut: function() { // called before mouse moves to a different cell OR moved out of all cells
 				dropLocation = null;
+				newStart = null;
 				view.destroyDrag(); // unrender whatever was done in renderDrag
 				mouseFollower.show(); // show in case we are moving out of all cells
 				enableCursor();
 			},
 			dragStop: function(ev) {
+				var hasChanged = newStart && !newStart.isSame(event.start);
+
 				if (view.name === 'resourceDay') {
 					var sameResources = $(originalResources).not(event.resources).length === 0 &&
 							$(event.resources).not(originalResources).length === 0;
@@ -926,4 +934,3 @@ function getDraggedElMeta(el) {
 
 	return { eventProps: eventProps, startTime: startTime, duration: duration, stick: stick };
 }
-
