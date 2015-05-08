@@ -3,13 +3,7 @@
 ----------------------------------------------------------------------------------------------------------------------*/
 // TODO: very useful to have a handler that gets called upon cellOut OR when dragging stops (for cleanup)
 
-function DragListener(coordMap, options) {
-	this.coordMap = coordMap;
-	this.options = options || {};
-}
-
-
-DragListener.prototype = {
+var DragListener = Class.extend({
 
 	coordMap: null,
 	options: null,
@@ -17,13 +11,11 @@ DragListener.prototype = {
 	isListening: false,
 	isDragging: false,
 
-	// the cell/date the mouse was over when listening started
+	// the cell the mouse was over when listening started
 	origCell: null,
-	origDate: null,
 
-	// the cell/date the mouse is over
+	// the cell the mouse is over
 	cell: null,
-	date: null,
 
 	// coordinates of the initial mousedown
 	mouseX0: null,
@@ -45,11 +37,19 @@ DragListener.prototype = {
 	scrollIntervalMs: 50, // millisecond wait between scroll increment
 
 
+	constructor: function(coordMap, options) {
+		this.coordMap = coordMap;
+		this.options = options || {};
+	},
+
+
 	// Call this when the user does a mousedown. Will probably lead to startListening
 	mousedown: function(ev) {
 		if (isPrimaryMouseButton(ev)) {
-
-			ev.preventDefault(); // prevents native selection in most browsers
+			
+			if (!isTouchEvent(ev)) {
+				ev.preventDefault(); // prevents native selection in most browsers but we still want to scroll on touch devices
+			}
 
 			this.startListening(ev);
 
@@ -82,19 +82,18 @@ DragListener.prototype = {
 
 			this.computeCoords(); // relies on `scrollEl`
 
-			// get info on the initial cell, date, and coordinates
+			// get info on the initial cell and its coordinates
 			if (ev) {
 				cell = this.getCell(ev);
 				this.origCell = cell;
-				this.origDate = cell ? cell.date : null;
 
-				this.mouseX0 = ev.pageX;
-				this.mouseY0 = ev.pageY;
+				this.mouseX0 = pointerEventToXY(ev).x;
+				this.mouseY0 = pointerEventToXY(ev).y;
 			}
 
 			$(document)
-				.on('mousemove', this.mousemoveProxy = $.proxy(this, 'mousemove'))
-				.on('mouseup', this.mouseupProxy = $.proxy(this, 'mouseup'))
+				.on(getMouseMoveEvent(), this.mousemoveProxy = $.proxy(this, 'mousemove'))
+				.on(getMouseUpEvent(), this.mouseupProxy = $.proxy(this, 'mouseup'))
 				.on('selectstart', this.preventDefault); // prevents native selection in IE<=8
 
 			this.isListening = true;
@@ -118,8 +117,8 @@ DragListener.prototype = {
 		if (!this.isDragging) { // if not already dragging...
 			// then start the drag if the minimum distance criteria is met
 			minDistance = this.options.distance || 1;
-			distanceSq = Math.pow(ev.pageX - this.mouseX0, 2) + Math.pow(ev.pageY - this.mouseY0, 2);
-			if (distanceSq >= minDistance * minDistance) { // use pythagorean theorem
+			distanceSq = Math.pow(pointerEventToXY(ev).x - this.mouseX0, 2) + Math.pow(pointerEventToXY(ev).y - this.mouseY0, 2);
+			if (distanceSq >= minDistance * minDistance) { // use Pythagorean theorem
 				this.startDrag(ev);
 			}
 		}
@@ -144,9 +143,10 @@ DragListener.prototype = {
 			this.trigger('dragStart', ev);
 
 			// report the initial cell the mouse is over
-			cell = this.getCell(ev);
+			// especially important if no min-distance and drag starts immediately
+			cell = this.getCell(ev); // this might be different from this.origCell if the min-distance is large
 			if (cell) {
-				this.cellOver(cell, true);
+				this.cellOver(cell);
 			}
 		}
 	},
@@ -163,7 +163,7 @@ DragListener.prototype = {
 				if (this.cell) {
 					this.cellOut();
 				}
-				if (cell) {
+				if (cell && (!isTouchEvent(ev) || dragOnTouchDevices)) {
 					this.cellOver(cell);
 				}
 			}
@@ -176,8 +176,7 @@ DragListener.prototype = {
 	// Called when the mouse has just moved over a new cell
 	cellOver: function(cell) {
 		this.cell = cell;
-		this.date = cell.date;
-		this.trigger('cellOver', cell, cell.date);
+		this.trigger('cellOver', cell, isCellsEqual(cell, this.origCell));
 	},
 
 
@@ -186,7 +185,6 @@ DragListener.prototype = {
 		if (this.cell) {
 			this.trigger('cellOut', this.cell);
 			this.cell = null;
-			this.date = null;
 		}
 	},
 
@@ -220,8 +218,8 @@ DragListener.prototype = {
 			}
 
 			$(document)
-				.off('mousemove', this.mousemoveProxy)
-				.off('mouseup', this.mouseupProxy)
+				.off(getMouseMoveEvent(), this.mousemoveProxy)
+				.off(getMouseUpEvent(), this.mouseupProxy)
 				.off('selectstart', this.preventDefault);
 
 			this.mousemoveProxy = null;
@@ -231,14 +229,14 @@ DragListener.prototype = {
 			this.trigger('listenStop', ev);
 
 			this.origCell = this.cell = null;
-			this.origDate = this.date = null;
+			this.coordMap.clear();
 		}
 	},
 
 
 	// Gets the cell underneath the coordinates for the given mouse event
 	getCell: function(ev) {
-		return this.coordMap.getCell(ev.pageX, ev.pageY);
+		return this.coordMap.getCell(pointerEventToXY(ev).x, pointerEventToXY(ev).y);
 	},
 
 
@@ -290,10 +288,10 @@ DragListener.prototype = {
 		if (bounds) { // only scroll if scrollEl exists
 
 			// compute closeness to edges. valid range is from 0.0 - 1.0
-			topCloseness = (sensitivity - (ev.pageY - bounds.top)) / sensitivity;
-			bottomCloseness = (sensitivity - (bounds.bottom - ev.pageY)) / sensitivity;
-			leftCloseness = (sensitivity - (ev.pageX - bounds.left)) / sensitivity;
-			rightCloseness = (sensitivity - (bounds.right - ev.pageX)) / sensitivity;
+			topCloseness = (sensitivity - (pointerEventToXY(ev).y - bounds.top)) / sensitivity;
+			bottomCloseness = (sensitivity - (bounds.bottom - pointerEventToXY(ev).y)) / sensitivity;
+			leftCloseness = (sensitivity - (pointerEventToXY(ev).x - bounds.left)) / sensitivity;
+			rightCloseness = (sensitivity - (bounds.right - pointerEventToXY(ev).x)) / sensitivity;
 
 			// translate vertical closeness into velocity.
 			// mouse must be completely in bounds for velocity to happen.
@@ -405,7 +403,7 @@ DragListener.prototype = {
 		}
 	}
 
-};
+});
 
 
 // Returns `true` if the cells are identically equal. `false` otherwise.

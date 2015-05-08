@@ -5,6 +5,7 @@
 .fc-toolbar {
 	text-align: center;
 	margin-bottom: 1em;
+	line-height: 2em;
 }
 
 .fc-toolbar .fc-left {
@@ -23,6 +24,23 @@
 .fc .fc-toolbar > * > * { /* extra precedence to override button border margins */
 	float: left;
 	margin-left: .75em;
+}
+
+@media print, all and (max-width: 601px) {
+	.fc-toolbar {
+		margin-bottom: 0;
+	}
+	.fc-toolbar .fc-left,
+	.fc-toolbar .fc-center {
+		float: inherit;
+		display: block;
+	}
+	.fc .fc-toolbar > * > * {
+		float: inherit;
+	}
+	.fc-toolbar .fc-right {
+		float: inherit;
+	}
 }
 
 /* the first thing within each left/center/right section */

@@ -1,26 +1,20 @@
 
-/* An abstract class for the "basic" views, as well as month view. Renders one or more rows of day cells.
+/* An abstract class for the "list" views. Renders one or more rows of day cells.
 ----------------------------------------------------------------------------------------------------------------------*/
 // It is a manager for a DayGrid subcomponent, which does most of the heavy lifting.
 // It is responsible for managing width/height.
 
-var BasicView = fcViews.basic = View.extend({
-
+var ListView = fcViews.list = View.extend({
 	dayGrid: null, // the main subcomponent that does most of the heavy lifting
-
-	dayNumbersVisible: false, // display day numbers on each day cell?
-	weekNumbersVisible: false, // display week numbers along the side?
-
 	weekNumberWidth: null, // width of all the week-number cells running down the side
-
 	headRowEl: null, // the fake row element of the day-of-week header
-
+	defultEventLimit: 5, //we need to show some events in each cell 
+	viewDateOnLeft: false, //true to display date on left, false to display above the day
 
 	initialize: function() {
 		this.dayGrid = new DayGrid(this);
 		this.coordMap = this.dayGrid.coordMap; // the view's date-to-cell mapping is identical to the subcomponent's
 	},
-
 
 	// Sets the display range and computes all necessary dates
 	setRange: function(range) {
@@ -30,33 +24,19 @@ var BasicView = fcViews.basic = View.extend({
 		this.dayGrid.setRange(range);
 	},
 
-
-	// Compute the value to feed into setRange. Overrides superclass.
-	computeRange: function(date) {
-		var range = View.prototype.computeRange.call(this, date); // get value from the super-method
-
-		// year and month views should be aligned with weeks. this is already done for week
-		if (/year|month/.test(range.intervalUnit)) {
-			range.start.startOf('week');
-			range.start = this.skipHiddenDays(range.start);
-
-			// make end-of-week if not already
-			if (range.end.weekday()) {
-				range.end.add(1, 'week').startOf('week');
-				range.end = this.skipHiddenDays(range.end, -1, true); // exclusively move backwards
-			}
-		}
-
-		return range;
-	},
-
-
-	// Renders the view into `this.el`, which should already be assigned
+	// Renders the view into `this.el`, which should already be assigned.
 	render: function() {
+		this.dayGrid.colCnt = 1;
+		this.dayGrid.rowCnt = this.dayGrid.cellDates.length;
+		this.dayGrid.numbersVisible = true;
 
-		this.dayNumbersVisible = this.dayGrid.rowCnt > 1; // TODO: make grid responsible
-		this.weekNumbersVisible = this.opt('weekNumbers');
-		this.dayGrid.numbersVisible = this.dayNumbersVisible || this.weekNumbersVisible;
+		if (this.opt('viewDateOnLeft')) {
+			this.viewDateOnLeft = this.opt('viewDateOnLeft');
+			this.el.removeClass('fc-display-date-above');
+		}
+		else {
+			this.el.addClass('fc-display-date-above');
+		}
 
 		this.el.addClass('fc-basic-view').html(this.renderHtml());
 
@@ -67,6 +47,8 @@ var BasicView = fcViews.basic = View.extend({
 
 		this.dayGrid.el = this.el.find('.fc-day-grid');
 		this.dayGrid.render(this.hasRigidRows());
+
+		View.prototype.render.call(this); // call the super-method
 	},
 
 
@@ -82,13 +64,6 @@ var BasicView = fcViews.basic = View.extend({
 	renderHtml: function() {
 		return '' +
 			'<table>' +
-				'<thead>' +
-					'<tr>' +
-						'<td class="' + this.widgetHeaderClass + '">' +
-							this.dayGrid.headHtml() + // render the day-of-week headers
-						'</td>' +
-					'</tr>' +
-				'</thead>' +
 				'<tbody>' +
 					'<tr>' +
 						'<td class="' + this.widgetContentClass + '">' +
@@ -105,13 +80,15 @@ var BasicView = fcViews.basic = View.extend({
 	// Generates the HTML that will go before the day-of week header cells.
 	// Queried by the DayGrid subcomponent when generating rows. Ordering depends on isRTL.
 	headIntroHtml: function() {
-		if (this.weekNumbersVisible) {
+		if (this.viewDateOnLeft === true) {
 			return '' +
 				'<th class="fc-week-number ' + this.widgetHeaderClass + '" ' + this.weekNumberStyleAttr() + '>' +
-					'<span>' + // needed for matchCellWidths
-						htmlEscape(this.opt('weekNumberTitle')) +
+					'<span>' +
 					'</span>' +
 				'</th>';
+		}
+		else {
+			return '';
 		}
 	},
 
@@ -119,13 +96,16 @@ var BasicView = fcViews.basic = View.extend({
 	// Generates the HTML that will go before content-skeleton cells that display the day/week numbers.
 	// Queried by the DayGrid subcomponent. Ordering depends on isRTL.
 	numberIntroHtml: function(row) {
-		if (this.weekNumbersVisible) {
+		if (this.viewDateOnLeft === true) {
 			return '' +
 				'<td class="fc-week-number" ' + this.weekNumberStyleAttr() + '>' +
 					'<span>' + // needed for matchCellWidths
-						this.calendar.calculateWeekNumber(this.dayGrid.getCell(row, 0).start) +
+						this.dayGrid.getCell(row, 0).start.format('ddd MMM D, YYYY') +
 					'</span>' +
 				'</td>';
+		}
+		else {
+			return '';
 		}
 	},
 
@@ -133,9 +113,12 @@ var BasicView = fcViews.basic = View.extend({
 	// Generates the HTML that goes before the day bg cells for each day-row.
 	// Queried by the DayGrid subcomponent. Ordering depends on isRTL.
 	dayIntroHtml: function() {
-		if (this.weekNumbersVisible) {
+		if (this.viewDateOnLeft === true) {
 			return '<td class="fc-week-number ' + this.widgetContentClass + '" ' +
 				this.weekNumberStyleAttr() + '></td>';
+		}
+		else {
+			return '';
 		}
 	},
 
@@ -143,8 +126,11 @@ var BasicView = fcViews.basic = View.extend({
 	// Generates the HTML that goes before every other type of row generated by DayGrid. Ordering depends on isRTL.
 	// Affects helper-skeleton and highlight-skeleton rows.
 	introHtml: function() {
-		if (this.weekNumbersVisible) {
+		if (this.viewDateOnLeft === true) {
 			return '<td class="fc-week-number" ' + this.weekNumberStyleAttr() + '></td>';
+		}
+		else {
+			return '';
 		}
 	},
 
@@ -152,20 +138,26 @@ var BasicView = fcViews.basic = View.extend({
 	// Generates the HTML for the <td>s of the "number" row in the DayGrid's content skeleton.
 	// The number row will only exist if either day numbers or week numbers are turned on.
 	numberCellHtml: function(cell) {
-		var date = cell.start;
-		var classes;
-
-		if (!this.dayNumbersVisible) { // if there are week numbers but not day numbers
-			return '<td/>'; //  will create an empty space above events :(
+		if (this.viewDateOnLeft === true) {
+			return '<td/>';
 		}
+		else {
+			var date = cell.start;
+			var classes;
 
-		classes = this.dayGrid.getDayClasses(date);
-		classes.unshift('fc-day-number');
+			classes = this.dayGrid.getDayClasses(date);
+			classes.unshift('fc-day-number');
 
-		return '' +
-			'<td class="' + classes.join(' ') + '" data-date="' + date.format() + '">' +
-				date.date() +
-			'</td>';
+			return '' +
+				'<td class="' + classes.join(' ') + '" data-date="' + date.format() + '">' +
+					'<span class="fc-list-header-left">' +
+						date.format('dddd') +
+					'</span>' +
+					'<span class="fc-list-header-right">' +
+						date.format('MMM D, YYYY') +
+					'</span>' +
+				'</td>';
+		}
 	},
 
 
@@ -181,6 +173,10 @@ var BasicView = fcViews.basic = View.extend({
 	// Determines whether each row should have a constant height
 	hasRigidRows: function() {
 		var eventLimit = this.opt('eventLimit');
+		if (eventLimit === true) {
+			eventLimit = this.defultEventLimit;
+		}
+
 		return eventLimit && typeof eventLimit !== 'number';
 	},
 
@@ -191,19 +187,20 @@ var BasicView = fcViews.basic = View.extend({
 
 	// Refreshes the horizontal dimensions of the view
 	updateWidth: function() {
-		if (this.weekNumbersVisible) {
-			// Make sure all week number cells running down the side have the same width.
-			// Record the width for cells created later.
-			this.weekNumberWidth = matchCellWidths(
-				this.el.find('.fc-week-number')
-			);
-		}
+		// Make sure all week number cells running down the side have the same width.
+		// Record the width for cells created later.
+		this.weekNumberWidth = matchCellWidths(
+			this.el.find('.fc-week-number')
+		);
 	},
 
 
 	// Adjusts the vertical dimensions of the view to the specified values
 	setHeight: function(totalHeight, isAuto) {
 		var eventLimit = this.opt('eventLimit');
+		if (eventLimit === true) {
+			eventLimit = this.defultEventLimit;
+		}
 		var scrollerHeight;
 
 		// reset all heights to be natural
@@ -258,17 +255,21 @@ var BasicView = fcViews.basic = View.extend({
 		this.dayGrid.renderEvents(events);
 
 		this.updateHeight(); // must compensate for events that overflow the row
+
+		View.prototype.renderEvents.call(this, events); // call the super-method
 	},
 
 
 	// Retrieves all segment objects that are rendered in the view
-	getEventSegs: function() {
-		return this.dayGrid.getEventSegs();
+	getSegs: function() {
+		return this.dayGrid.getSegs();
 	},
 
 
 	// Unrenders all event elements and clears internal segment data
 	destroyEvents: function() {
+		View.prototype.destroyEvents.call(this); // do this before dayGrid's segs have been cleared
+
 		this.recordScroll(); // removing events will reduce height and mess with the scroll, so record beforehand
 		this.dayGrid.destroyEvents();
 
@@ -278,16 +279,18 @@ var BasicView = fcViews.basic = View.extend({
 	},
 
 
-	/* Dragging (for both events and external elements)
+	/* Event Dragging
 	------------------------------------------------------------------------------------------------------------------*/
 
 
+	// Renders a visual indication of an event being dragged over the view.
 	// A returned value of `true` signals that a mock "helper" event has been rendered.
-	renderDrag: function(dropLocation, seg) {
-		return this.dayGrid.renderDrag(dropLocation, seg);
+	renderDrag: function(start, end, seg) {
+		return this.dayGrid.renderDrag(start, end, seg);
 	},
 
 
+	// Unrenders the visual indication of an event being dragged over the view
 	destroyDrag: function() {
 		this.dayGrid.destroyDrag();
 	},
@@ -298,8 +301,8 @@ var BasicView = fcViews.basic = View.extend({
 
 
 	// Renders a visual indication of a selection
-	renderSelection: function(range) {
-		this.dayGrid.renderSelection(range);
+	renderSelection: function(start, end) {
+		this.dayGrid.renderSelection(start, end);
 	},
 
 
@@ -309,3 +312,4 @@ var BasicView = fcViews.basic = View.extend({
 	}
 
 });
+ListView.duration = { months: 1 };

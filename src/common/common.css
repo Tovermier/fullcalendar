@@ -8,6 +8,7 @@
 .fc {
 	direction: ltr;
 	text-align: left;
+	-ms-touch-action: none;
 }
 
 .fc-rtl {
@@ -119,6 +120,13 @@ body .fc { /* extra precedence to overcome jqui */
 	font-size: 1em; /* normalize */
 	white-space: nowrap;
 	cursor: pointer;
+}
+
+@media print, all and (max-width: 400px) {
+	/* make some room on skinny screens */
+	.fc button {
+		padding: 0 .4em;
+	}
 }
 
 /* Firefox has an annoying inner border */

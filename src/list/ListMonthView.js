@@ -1,8 +1,8 @@
 
-/* A view with a single simple day cell
+/* A list view with simple day cells
 ----------------------------------------------------------------------------------------------------------------------*/
 
-fcViews.basicDay = {
-	type: 'basic',
-	duration: { days: 1 }
+fcViews.listMonth = {
+	type: 'list',
+	duration: { weeks: 4 }
 };
