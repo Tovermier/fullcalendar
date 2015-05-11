@@ -7850,14 +7850,13 @@ function Calendar(element, instanceOptions) {
 		if (currentView && viewType && currentView.type !== viewType) {
 			header.deactivateButton(currentView.type);
 			currentView.name = delta = undefined;
+			freezeContentHeight(); // prevent a scroll jump when view element is removed
+			if (currentView.start) { // rendered before?
+				currentView.destroyView();
+			}
+			currentView.el.remove();
+			currentView = null;
 		}
-
-		freezeContentHeight(); // prevent a scroll jump when view element is removed
-		if (currentView.start) { // rendered before?
-			currentView.destroyView();
-		}
-		currentView.el.remove();
-		currentView = null;
 
 		// if viewType changed, or the view was never created, create a fresh view
 		if (!currentView && viewType) {
