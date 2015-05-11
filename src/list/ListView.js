@@ -8,7 +8,7 @@ var ListView = fcViews.list = View.extend({
 	dayGrid: null, // the main subcomponent that does most of the heavy lifting
 	weekNumberWidth: null, // width of all the week-number cells running down the side
 	headRowEl: null, // the fake row element of the day-of-week header
-	defultEventLimit: 5, //we need to show some events in each cell 
+	defultEventLimit: 5, //we need to show some events in each cell
 	viewDateOnLeft: false, //true to display date on left, false to display above the day
 
 	initialize: function() {
@@ -253,15 +253,13 @@ var ListView = fcViews.list = View.extend({
 	// Renders the given events onto the view and populates the segments array
 	renderEvents: function(events) {
 		this.dayGrid.renderEvents(events);
-
 		this.updateHeight(); // must compensate for events that overflow the row
-
 		View.prototype.renderEvents.call(this, events); // call the super-method
 	},
 
 
 	// Retrieves all segment objects that are rendered in the view
-	getSegs: function() {
+	getEventSegs: function() {
 		return this.dayGrid.getSegs();
 	},
 

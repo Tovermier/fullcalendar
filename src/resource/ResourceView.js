@@ -1,15 +1,10 @@
 
-function ResourceView(calendar) {
-	fcViews.agenda.call(this, calendar); // call the super-constructor
-
-	this.cellToDate = function() {
-		return this.start.clone();
-	};
-}
-
-
-ResourceView.prototype = createObject(fcViews.agenda.prototype); // extends AgendaView
-$.extend(ResourceView.prototype, {
+var ResourceView = fcViews.resource = AgendaView.extend({
+	initialize: function() {
+		this.cellToDate = function() {
+			return this.start.clone();
+		};
+	},
 
 	resources: function() {
 		this._resources = this._resources || this.calendar.fetchResources();
@@ -27,11 +22,11 @@ $.extend(ResourceView.prototype, {
 	},
 
 	// Called when a new selection is made. Updates internal state and triggers handlers.
-	reportSelection: function(start, end, ev, resources) {
+	reportSelection: function(range, ev, resources) {
 		this.isSelected = true;
 
 		this.calendar.trigger.apply(
-			this.calendar, ['select', this, start, end, ev, this, resources]
+			this.calendar, ['select', this, range.start, range.end, ev, this, resources]
 		);
 	},
 

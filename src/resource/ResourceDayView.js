@@ -2,7 +2,10 @@
 /* A day view with an all-day cell area at the top, and a time grid below by resource
 ----------------------------------------------------------------------------------------------------------------------*/
 
-fcViews.resourceDay = ResourceDayView;
+fcViews.resourceDay = {
+	type: 'resource',
+	duration: { days: 1 },
+};
 
 function ResourceDayView(calendar) {
 	ResourceView.call(this, calendar); // call the super-constructor
@@ -29,20 +32,10 @@ function ResourceDayView(calendar) {
 
 ResourceDayView.prototype = createObject(ResourceView.prototype); // define the super-class
 $.extend(ResourceDayView.prototype, {
-
-	name: 'resourceDay',
-
-	incrementDate: function(date, delta) {
-		return fcViews.agendaDay.prototype.incrementDate.apply(this, arguments);
-	},
-
 	render: function(date) {
 		this.start = this.intervalStart = date.clone().stripTime();
 		this.end = this.intervalEnd = this.start.clone().add(1, 'days');
-
 		this.title = this.calendar.formatDate(this.start, this.opt('titleFormat'));
-
 		fcViews.agenda.prototype.render.call(this, this.resources().length || 1); // call the super-method
 	}
-
 });

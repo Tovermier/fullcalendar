@@ -10048,13 +10048,10 @@ setDefaults({
 
 var AGENDA_ALL_DAY_EVENT_LIMIT = 5;
 
-fcViews.agenda = View.extend({ // AgendaView
-
+var AgendaView = fcViews.agenda = View.extend({ // AgendaView
 	timeGrid: null, // the main time-grid subcomponent of this view
 	dayGrid: null, // the "all-day" subcomponent. if all-day is turned off, this will be null
-
 	axisWidth: null, // the width of the time axis running down the side
-
 	noScrollRowEls: null, // set of fake row elements that must compensate when scrollerEl has scrollbars
 
 	// when the time-grid isn't tall enough to occupy the given height, we render an <hr> underneath
@@ -10097,7 +10094,6 @@ fcViews.agenda = View.extend({ // AgendaView
 
 	// Renders the view into `this.el`, which has already been assigned
 	render: function() {
-
 		this.el.addClass('fc-agenda-view').html(this.renderHtml());
 
 		// the element that wraps the time-grid that will probably scroll
@@ -10462,7 +10458,7 @@ var ListView = fcViews.list = View.extend({
 	dayGrid: null, // the main subcomponent that does most of the heavy lifting
 	weekNumberWidth: null, // width of all the week-number cells running down the side
 	headRowEl: null, // the fake row element of the day-of-week header
-	defultEventLimit: 5, //we need to show some events in each cell 
+	defultEventLimit: 5, //we need to show some events in each cell
 	viewDateOnLeft: false, //true to display date on left, false to display above the day
 
 	initialize: function() {
@@ -10707,15 +10703,13 @@ var ListView = fcViews.list = View.extend({
 	// Renders the given events onto the view and populates the segments array
 	renderEvents: function(events) {
 		this.dayGrid.renderEvents(events);
-
 		this.updateHeight(); // must compensate for events that overflow the row
-
 		View.prototype.renderEvents.call(this, events); // call the super-method
 	},
 
 
 	// Retrieves all segment objects that are rendered in the view
-	getSegs: function() {
+	getEventSegs: function() {
 		return this.dayGrid.getSegs();
 	},
 
@@ -10780,17 +10774,12 @@ fcViews.listMonth = {
 
 ;;
 
-function ResourceView(calendar) {
-	fcViews.agenda.call(this, calendar); // call the super-constructor
-
-	this.cellToDate = function() {
-		return this.start.clone();
-	};
-}
-
-
-ResourceView.prototype = createObject(fcViews.agenda.prototype); // extends AgendaView
-$.extend(ResourceView.prototype, {
+var ResourceView = fcViews.resource = AgendaView.extend({
+	initialize: function() {
+		this.cellToDate = function() {
+			return this.start.clone();
+		};
+	},
 
 	resources: function() {
 		this._resources = this._resources || this.calendar.fetchResources();
@@ -10808,11 +10797,11 @@ $.extend(ResourceView.prototype, {
 	},
 
 	// Called when a new selection is made. Updates internal state and triggers handlers.
-	reportSelection: function(start, end, ev, resources) {
+	reportSelection: function(range, ev, resources) {
 		this.isSelected = true;
 
 		this.calendar.trigger.apply(
-			this.calendar, ['select', this, start, end, ev, this, resources]
+			this.calendar, ['select', this, range.start, range.end, ev, this, resources]
 		);
 	},
 
@@ -10842,50 +10831,43 @@ $.extend(ResourceView.prototype, {
 /* A day view with an all-day cell area at the top, and a time grid below by resource
 ----------------------------------------------------------------------------------------------------------------------*/
 
-fcViews.resourceDay = ResourceDayView;
+fcViews.resourceDay = {
+	type: 'resource',
+	duration: { days: 1 },
+};
 
-function ResourceDayView(calendar) {
-	ResourceView.call(this, calendar); // call the super-constructor
-
-	var superRangeToSegments = this.rangeToSegments;
-	this.rangeToSegments = function(start, end) {
-		var colCnt = this.colCnt;
-		var segments = [];
-
-		$.each(superRangeToSegments(start, end), function(index, segment) {
-			for (var col=0; col<colCnt; col++) {
-				segments.push({
-					row: segment.row,
-					leftCol: col,
-					rightCol: col,
-					isStart: segment.isStart,
-					isEnd: segment.isEnd
-				});
-			}
-		});
-		return segments;
-	};
-}
-
-ResourceDayView.prototype = createObject(ResourceView.prototype); // define the super-class
-$.extend(ResourceDayView.prototype, {
-
-	name: 'resourceDay',
-
-	incrementDate: function(date, delta) {
-		return fcViews.agendaDay.prototype.incrementDate.apply(this, arguments);
-	},
-
-	render: function(date) {
-		this.start = this.intervalStart = date.clone().stripTime();
-		this.end = this.intervalEnd = this.start.clone().add(1, 'days');
-
-		this.title = this.calendar.formatDate(this.start, this.opt('titleFormat'));
-
-		fcViews.agenda.prototype.render.call(this, this.resources().length || 1); // call the super-method
-	}
-
-});
+// function ResourceDayView(calendar) {
+// 	ResourceView.call(this, calendar); // call the super-constructor
+//
+// 	var superRangeToSegments = this.rangeToSegments;
+// 	this.rangeToSegments = function(start, end) {
+// 		var colCnt = this.colCnt;
+// 		var segments = [];
+//
+// 		$.each(superRangeToSegments(start, end), function(index, segment) {
+// 			for (var col=0; col<colCnt; col++) {
+// 				segments.push({
+// 					row: segment.row,
+// 					leftCol: col,
+// 					rightCol: col,
+// 					isStart: segment.isStart,
+// 					isEnd: segment.isEnd
+// 				});
+// 			}
+// 		});
+// 		return segments;
+// 	};
+// }
+//
+// ResourceDayView.prototype = createObject(ResourceView.prototype); // define the super-class
+// $.extend(ResourceDayView.prototype, {
+// 	render: function(date) {
+// 		this.start = this.intervalStart = date.clone().stripTime();
+// 		this.end = this.intervalEnd = this.start.clone().add(1, 'days');
+// 		this.title = this.calendar.formatDate(this.start, this.opt('titleFormat'));
+// 		fcViews.agenda.prototype.render.call(this, this.resources().length || 1); // call the super-method
+// 	}
+// });
 
 ;;
 

@@ -16,13 +16,10 @@ setDefaults({
 
 var AGENDA_ALL_DAY_EVENT_LIMIT = 5;
 
-fcViews.agenda = View.extend({ // AgendaView
-
+var AgendaView = fcViews.agenda = View.extend({ // AgendaView
 	timeGrid: null, // the main time-grid subcomponent of this view
 	dayGrid: null, // the "all-day" subcomponent. if all-day is turned off, this will be null
-
 	axisWidth: null, // the width of the time axis running down the side
-
 	noScrollRowEls: null, // set of fake row elements that must compensate when scrollerEl has scrollbars
 
 	// when the time-grid isn't tall enough to occupy the given height, we render an <hr> underneath
@@ -65,7 +62,6 @@ fcViews.agenda = View.extend({ // AgendaView
 
 	// Renders the view into `this.el`, which has already been assigned
 	render: function() {
-
 		this.el.addClass('fc-agenda-view').html(this.renderHtml());
 
 		// the element that wraps the time-grid that will probably scroll
