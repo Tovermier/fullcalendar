@@ -30,12 +30,12 @@ function ResourceDayView(calendar) {
 	};
 }
 
-ResourceDayView.prototype = createObject(ResourceView.prototype); // define the super-class
-$.extend(ResourceDayView.prototype, {
-	render: function(date) {
-		this.start = this.intervalStart = date.clone().stripTime();
-		this.end = this.intervalEnd = this.start.clone().add(1, 'days');
-		this.title = this.calendar.formatDate(this.start, this.opt('titleFormat'));
-		fcViews.agenda.prototype.render.call(this, this.resources().length || 1); // call the super-method
-	}
-});
+// ResourceDayView.prototype = createObject(ResourceView.prototype); // define the super-class
+// $.extend(ResourceDayView.prototype, {
+// 	render: function(date) {
+// 		this.start = this.intervalStart = date.clone().stripTime();
+// 		this.end = this.intervalEnd = this.start.clone().add(1, 'days');
+// 		this.title = this.calendar.formatDate(this.start, this.opt('titleFormat'));
+// 		fcViews.agenda.prototype.render.call(this, this.resources().length || 1); // call the super-method
+// 	}
+// });

@@ -10776,6 +10776,8 @@ fcViews.listMonth = {
 
 var ResourceView = fcViews.resource = AgendaView.extend({
 	initialize: function() {
+		this.timeGrid = new TimeGrid(this);
+		this.coordMap = this.timeGrid.coordMap;
 		this.cellToDate = function() {
 			return this.start.clone();
 		};
@@ -10806,12 +10808,12 @@ var ResourceView = fcViews.resource = AgendaView.extend({
 	},
 
 	// Used by the `headHtml` method, via RowRenderer, for rendering the HTML of a day-of-week header cell
-	headCellHtml: function(row, col, date) {
-		var resource = this.resources()[col];
+	headCellHtml: function(cell) {
+		var resource = this.resources()[cell.col];
 		var classes = [
 			'fc-day-header',
 			this.widgetHeaderClass,
-			'fc-' + dayIDs[date.day()]
+			'fc-' + dayIDs[cell.day.day()]
 		];
 
 		if(resource) {
@@ -10836,29 +10838,29 @@ fcViews.resourceDay = {
 	duration: { days: 1 },
 };
 
-// function ResourceDayView(calendar) {
-// 	ResourceView.call(this, calendar); // call the super-constructor
-//
-// 	var superRangeToSegments = this.rangeToSegments;
-// 	this.rangeToSegments = function(start, end) {
-// 		var colCnt = this.colCnt;
-// 		var segments = [];
-//
-// 		$.each(superRangeToSegments(start, end), function(index, segment) {
-// 			for (var col=0; col<colCnt; col++) {
-// 				segments.push({
-// 					row: segment.row,
-// 					leftCol: col,
-// 					rightCol: col,
-// 					isStart: segment.isStart,
-// 					isEnd: segment.isEnd
-// 				});
-// 			}
-// 		});
-// 		return segments;
-// 	};
-// }
-//
+function ResourceDayView(calendar) {
+	ResourceView.call(this, calendar); // call the super-constructor
+
+	var superRangeToSegments = this.rangeToSegments;
+	this.rangeToSegments = function(start, end) {
+		var colCnt = this.colCnt;
+		var segments = [];
+
+		$.each(superRangeToSegments(start, end), function(index, segment) {
+			for (var col=0; col<colCnt; col++) {
+				segments.push({
+					row: segment.row,
+					leftCol: col,
+					rightCol: col,
+					isStart: segment.isStart,
+					isEnd: segment.isEnd
+				});
+			}
+		});
+		return segments;
+	};
+}
+
 // ResourceDayView.prototype = createObject(ResourceView.prototype); // define the super-class
 // $.extend(ResourceDayView.prototype, {
 // 	render: function(date) {

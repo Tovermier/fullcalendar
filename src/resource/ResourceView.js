@@ -1,6 +1,8 @@
 
 var ResourceView = fcViews.resource = AgendaView.extend({
 	initialize: function() {
+		this.timeGrid = new TimeGrid(this);
+		this.coordMap = this.timeGrid.coordMap;
 		this.cellToDate = function() {
 			return this.start.clone();
 		};
@@ -31,12 +33,12 @@ var ResourceView = fcViews.resource = AgendaView.extend({
 	},
 
 	// Used by the `headHtml` method, via RowRenderer, for rendering the HTML of a day-of-week header cell
-	headCellHtml: function(row, col, date) {
-		var resource = this.resources()[col];
+	headCellHtml: function(cell) {
+		var resource = this.resources()[cell.col];
 		var classes = [
 			'fc-day-header',
 			this.widgetHeaderClass,
-			'fc-' + dayIDs[date.day()]
+			'fc-' + dayIDs[cell.day.day()]
 		];
 
 		if(resource) {
